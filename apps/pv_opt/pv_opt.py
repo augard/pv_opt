@@ -1703,9 +1703,11 @@ class PVOpt(hass.Hass):
             # Convert prices to the format expected by the Tariff class
             prices = []
             timestamps = []
-            for entry in data:
-                timestamps.append(pd.Timestamp(entry['datetime']))
-                prices.append(entry['price'])
+            print(f"Data: {data}")
+            for ts, price in zip(data['unix_seconds'], data['price']):
+                timestamps.append(pd.Timestamp(ts, unit='s', tz='UTC'))
+                # Convert from EUR/MWh to EUR/kWh
+                prices.append(price / 1000)
             
             # Create a DataFrame with the prices
             df = pd.DataFrame({
@@ -1727,7 +1729,7 @@ class PVOpt(hass.Hass):
                 fixed=None,  # No standing charge for day-ahead prices
                 unit=unit_rate,
                 host=self,
-                manual=True,
+                manual=False,
                 price_data=df
             )
             
