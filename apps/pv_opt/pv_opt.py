@@ -1720,6 +1720,7 @@ class PVOpt(hass.Hass):
         return pv.Tariff(
             name=name,
             octopus=False,
+            eco7=True,
             export=(direction == "export"),
             fixed=fixed,
             unit="EUR",
