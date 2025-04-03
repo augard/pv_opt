@@ -3587,6 +3587,11 @@ class PVOpt(hass.Hass):
                 self._cost_actual().sum() / self.get_config("id_consumption_today"),
                 1,
             )
+        elif ("id_grid_import_today" in self.config) and self.entity_exists(self.config["id_grid_import_today"]) and self.get_config("id_grid_import_today") > 0:
+            unit_cost_today = round(
+                self._cost_actual().sum() / self.get_config("id_grid_import_today"),
+                1,
+            )
         else:
             unit_cost_today = 0
 
