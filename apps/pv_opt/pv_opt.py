@@ -1674,7 +1674,7 @@ class PVOpt(hass.Hass):
         self.log("")
         self.log("Finished loading contract")
 
-    def _manual_tariff(self, direction="import"):
+ """ def _manual_tariff(self, direction="import"):
         name = self.get_config(f"manual_{direction}_tariff_name")
         self.log(f"Trying to load manual {direction} tariff {name}")
         tz = self.get_config(f"manual_{direction}_tariff_tz")
@@ -1692,7 +1692,73 @@ class PVOpt(hass.Hass):
             unit=unit,
             host=self,
             manual=True,
-        )
+        ) """
+
+    def _get_energy_charts_prices(self, direction="import"):
+        """Fetch electricity prices from energy-charts.info API"""
+        try:
+            import requests
+            from datetime import datetime, timedelta
+            
+            # Get current date and tomorrow's date
+            today = datetime.now()
+            tomorrow = today + timedelta(days=1)
+            
+            # Format dates for API
+            start_date = today.strftime("%Y-%m-%d")
+            end_date = tomorrow.strftime("%Y-%m-%d")
+            
+            # API endpoint for day-ahead prices
+            url = f"https://api.energy-charts.info/price"
+            params = {
+                "bzn": "CZ",  # German-Luxembourg bidding zone
+                "start": start_date,
+                "end": end_date
+            }
+            
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Convert prices to the format expected by the Tariff class
+            prices = []
+            timestamps = []
+            for entry in data:
+                timestamps.append(pd.Timestamp(entry['datetime']))
+                prices.append(entry['price'])
+            
+            # Create a DataFrame with the prices
+            df = pd.DataFrame({
+                'timestamp': timestamps,
+                'price': prices
+            })
+            
+            # Calculate average price for unit rate
+            unit_rate = df['price'].mean()
+            
+            # Create tariff name
+            name = f"energy_charts_{direction}_{today.strftime('%Y%m%d')}"
+            
+            # Create and return Tariff object
+            return pv.Tariff(
+                name=name,
+                octopus=False,
+                export=(direction == "export"),
+                fixed=None,  # No standing charge for day-ahead prices
+                unit=unit_rate,
+                host=self,
+                manual=True,
+                price_data=df
+            )
+            
+        except Exception as e:
+            self.log(f"Error fetching energy-charts.info prices: {str(e)}", level="ERROR")
+            return None
+
+    def _manual_tariff(self, direction="import"):
+        """Get electricity prices from energy-charts.info API"""
+        self.log(f"Fetching {direction} tariff from energy-charts.info")
+        return self._get_energy_charts_prices(direction)
 
     def _check_tariffs(self):
         if self.bottlecap_entities["import"] is not None:

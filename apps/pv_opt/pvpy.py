@@ -399,55 +399,6 @@ class Tariff:
         df.index = pd.to_datetime(df.index, utc=True)
         return df["agile_pred"]
 
-    def get_day_ahead(self, start):
-        url = "https://www.nordpoolgroup.com/api/marketdata/page/325?currency=GBP"
-
-        try:
-            r = requests.get(url)
-            r.raise_for_status()  # Raise an exception for unsuccessful HTTP status codes
-
-        except requests.exceptions.RequestException as e:
-            return
-
-        index = []
-        data = []
-        for row in r.json()["data"]["Rows"]:
-            str = ""
-            # pprint.pprint(row)
-
-            for column in row:
-                if isinstance(row[column], list):
-                    for i in row[column]:
-                        if i["CombinedName"] == "CET/CEST time":
-                            if len(i["Value"]) > 10:
-                                time = f"T{i['Value'][:2]}:00"
-                                # print(time)
-                        else:
-                            if len(i["Name"]) > 8:
-                                try:
-                                    # self.log(time, i["Name"], i["Value"])
-                                    data.append(float(i["Value"].replace(",", ".")))
-                                    index.append(
-                                        pd.Timestamp(
-                                            i["Name"].split("-")[2]
-                                            + "-"
-                                            + i["Name"].split("-")[1]
-                                            + "-"
-                                            + i["Name"].split("-")[0]
-                                            + " "
-                                            + time
-                                        )
-                                    )
-                                except:
-                                    pass
-
-        price = pd.Series(index=index, data=data).sort_index()
-        price.index = price.index.tz_localize("CET")
-        price.index = price.index.tz_convert("UTC")
-        price = price[~price.index.duplicated()]
-        return price.resample("30min").ffill().loc[start:]
-
-
 class InverterModel:
     """Describes the inverter
 
