@@ -1701,19 +1701,14 @@ class PVOpt(hass.Hass):
             data = response.json()
             
             # Convert prices to the format expected by the Tariff class
-            prices = []
-            timestamps = []
+            fixed = []
             print(f"Data: {data}")
             for ts, price in zip(data['unix_seconds'], data['price']):
-                timestamps.append(pd.Timestamp(ts, unit='s', tz='UTC'))
                 # Convert from EUR/MWh to EUR/kWh
-                prices.append(price / 1000)
-            
-            # Create a DataFrame with the prices
-            df = pd.DataFrame({
-                'timestamp': timestamps,
-                'price': prices
-            })
+                fixed.append({
+                    'period_start': pd.Timestamp(ts, unit='s', tz='UTC'),
+                    'price': price / 1000
+                })
             
             # Calculate average price for unit rate
             unit_rate = df['price'].mean()
@@ -1726,11 +1721,10 @@ class PVOpt(hass.Hass):
                 name=name,
                 octopus=False,
                 export=(direction == "export"),
-                fixed=None,  # No standing charge for day-ahead prices
+                fixed=fixed,
                 unit=unit_rate,
                 host=self,
-                manual=False,
-                price_data=df
+                manual=True
             )
             
         except Exception as e:
