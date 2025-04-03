@@ -1706,8 +1706,11 @@ class PVOpt(hass.Hass):
         for ts, price in zip(data['unix_seconds'], data['price']):
             # Convert from EUR/MWh to EUR/kWh
             fixed.append({
-                'period_start': pd.Timestamp(ts, unit='s', tz='UTC'),
-                'price': price / 1000
+                'valid_from': datetime.utcfromtimestamp(ts).isoformat() + "Z",
+                'valid_to': datetime.utcfromtimestamp(ts + 3600).isoformat() + "Z",
+                'value_exc_vat': price,
+                'value_inc_vat': price,
+                'payment_method':None
             })
         
         # Create tariff name
