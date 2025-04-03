@@ -1710,9 +1710,6 @@ class PVOpt(hass.Hass):
                     'price': price / 1000
                 })
             
-            # Calculate average price for unit rate
-            unit_rate = df['price'].mean()
-            
             # Create tariff name
             name = f"energy_charts_{direction}_{today.strftime('%Y%m%d')}"
             
@@ -1722,7 +1719,7 @@ class PVOpt(hass.Hass):
                 octopus=False,
                 export=(direction == "export"),
                 fixed=fixed,
-                unit=unit_rate,
+                unit="EUR",
                 host=self,
                 manual=True
             )
