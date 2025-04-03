@@ -1722,7 +1722,7 @@ class PVOpt(hass.Hass):
             octopus=False,
             export=(direction == "export"),
             fixed=fixed,
-            unit="EUR",
+            unit=fixed,
             host=self,
             manual=True
         )

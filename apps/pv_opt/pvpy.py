@@ -236,14 +236,7 @@ class Tariff:
         time_now = pd.Timestamp.now(tz="UTC")
 
         if start is None:
-            if self.eco7:
-                start = min([pd.Timestamp(x["valid_from"]) for x in self.day])
-
-            elif self.manual:
-                start = pd.Timestamp.now(tz=self.tz).floor("1D")
-
-            else:
-                start = min([pd.Timestamp(x["valid_from"]) for x in self.unit])
+            start = min([pd.Timestamp(x["valid_from"]) for x in self.unit])
 
         if end is None:
             end = pd.Timestamp.now(tz=start.tzinfo).ceil("30min")
