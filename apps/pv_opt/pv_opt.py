@@ -1674,26 +1674,6 @@ class PVOpt(hass.Hass):
         self.log("")
         self.log("Finished loading contract")
 
- """ def _manual_tariff(self, direction="import"):
-        name = self.get_config(f"manual_{direction}_tariff_name")
-        self.log(f"Trying to load manual {direction} tariff {name}")
-        tz = self.get_config(f"manual_{direction}_tariff_tz")
-        if direction == "import":
-            fixed = self.get_config(f"manual_{direction}_tariff_standing", 0.0)
-        else:
-            fixed = None
-        unit = self.get_config(f"manual_{direction}_tariff_unit")
-
-        return pv.Tariff(
-            name=name,
-            octopus=False,
-            export=(direction == "export"),
-            fixed=fixed,
-            unit=unit,
-            host=self,
-            manual=True,
-        ) """
-
     def _get_energy_charts_prices(self, direction="import"):
         """Fetch electricity prices from energy-charts.info API"""
         try:
