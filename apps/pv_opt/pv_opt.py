@@ -1676,57 +1676,53 @@ class PVOpt(hass.Hass):
 
     def _get_energy_charts_prices(self, direction="import"):
         """Fetch electricity prices from energy-charts.info API"""
-        try:
-            import requests
-            from datetime import datetime, timedelta
-            
-            # Get current date and tomorrow's date
-            today = datetime.now()
-            tomorrow = today + timedelta(days=1)
-            
-            # Format dates for API
-            start_date = today.strftime("%Y-%m-%d")
-            end_date = tomorrow.strftime("%Y-%m-%d")
-            
-            # API endpoint for day-ahead prices
-            url = f"https://api.energy-charts.info/price"
-            params = {
-                "bzn": "CZ",  # German-Luxembourg bidding zone
-                "start": start_date,
-                "end": end_date
-            }
-            
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-            
-            # Convert prices to the format expected by the Tariff class
-            fixed = []
-            print(f"Data: {data}")
-            for ts, price in zip(data['unix_seconds'], data['price']):
-                # Convert from EUR/MWh to EUR/kWh
-                fixed.append({
-                    'period_start': pd.Timestamp(ts, unit='s', tz='UTC'),
-                    'price': price / 1000
-                })
-            
-            # Create tariff name
-            name = f"energy_charts_{direction}_{today.strftime('%Y%m%d')}"
-            
-            # Create and return Tariff object
-            return pv.Tariff(
-                name=name,
-                octopus=False,
-                export=(direction == "export"),
-                fixed=fixed,
-                unit="EUR",
-                host=self,
-                manual=True
-            )
-            
-        except Exception as e:
-            self.log(f"Error fetching energy-charts.info prices: {str(e)}", level="ERROR")
-            return None
+
+        import requests
+        from datetime import datetime, timedelta
+        
+        # Get current date and tomorrow's date
+        today = datetime.now()
+        tomorrow = today + timedelta(days=1)
+        
+        # Format dates for API
+        start_date = today.strftime("%Y-%m-%d")
+        end_date = tomorrow.strftime("%Y-%m-%d")
+        
+        # API endpoint for day-ahead prices
+        url = f"https://api.energy-charts.info/price"
+        params = {
+            "bzn": "CZ",  # German-Luxembourg bidding zone
+            "start": start_date,
+            "end": end_date
+        }
+        
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Convert prices to the format expected by the Tariff class
+        fixed = []
+        print(f"Data: {data}")
+        for ts, price in zip(data['unix_seconds'], data['price']):
+            # Convert from EUR/MWh to EUR/kWh
+            fixed.append({
+                'period_start': pd.Timestamp(ts, unit='s', tz='UTC'),
+                'price': price / 1000
+            })
+        
+        # Create tariff name
+        name = f"energy_charts_{direction}_{today.strftime('%Y%m%d')}"
+        
+        # Create and return Tariff object
+        return pv.Tariff(
+            name=name,
+            octopus=False,
+            export=(direction == "export"),
+            fixed=fixed,
+            unit="EUR",
+            host=self,
+            manual=True
+        )
 
     def _manual_tariff(self, direction="import"):
         """Get electricity prices from energy-charts.info API"""
