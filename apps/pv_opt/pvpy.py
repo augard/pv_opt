@@ -250,105 +250,64 @@ class Tariff:
 
         use_day_ahead = kwargs.get("day_ahead", ((start > time_now) or (end > time_now)))
 
-        if self.eco7:
-            df = pd.concat(
-                [pd.DataFrame(x).set_index("valid_from")["value_inc_vat"] for x in [self.day, self.night]],
-                axis=1,
-            ).set_axis(["unit", "Night"], axis=1)
-            df.index = pd.to_datetime(df.index)
-            df = df.sort_index()
-            df = df.reindex(
-                index=pd.date_range(
-                    min([pd.Timestamp(x["valid_from"]) for x in self.day]),
-                    end,
-                    freq="30min",
-                )
-            ).ffill()
-            mask = (df.index.time >= self.eco7_start.time()) & (
-                df.index.time < (self.eco7_start + pd.Timedelta(7, "hours")).time()
-            )
-            df.loc[mask, "unit"] = df.loc[mask, "Night"]
-            df = df["unit"].loc[start:end]
+        df = pd.DataFrame(self.unit).set_index("valid_from")["value_inc_vat"]
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        if "AGILE" in self.name and use_day_ahead:
+            if self.agile_predict is None:
+                self.agile_predict = self._get_agile_predict()
 
-        elif self.manual:
-            df = (
-                pd.concat(
+            if self.agile_predict is not None:
+                df = pd.concat(
                     [
-                        pd.DataFrame(
-                            index=[midnight + pd.Timedelta(f"{x['period_start']}:00") for x in self.unit],
-                            data=[{"unit": x["price"]} for x in self.unit],
-                        ).sort_index()
-                        for midnight in pd.date_range(
-                            start.floor("1D") - pd.Timedelta("1D"),
-                            end.ceil("1D"),
-                            freq="1D",
-                        )
+                        df,
+                        self.agile_predict.loc[df.index[-1] + pd.Timedelta("30min") : end],
                     ]
                 )
-                .resample("30min")
-                .ffill()
-                .loc[start:end]
-            )
 
+        # If the index frequency >30 minutes so we need to just extend it:
+        if (len(df) > 1 and ((df.index[-1] - df.index[-2]).total_seconds() / 60) > 30) or len(df) == 1:
+            newindex = pd.date_range(df.index[0], end, freq="30min")
+            df = df.reindex(index=newindex).ffill().loc[start:]
         else:
-            df = pd.DataFrame(self.unit).set_index("valid_from")["value_inc_vat"]
-            df.index = pd.to_datetime(df.index)
-            df = df.sort_index()
-            if "AGILE" in self.name and use_day_ahead:
-                if self.agile_predict is None:
-                    self.agile_predict = self._get_agile_predict()
+            i = 0
+            while df.index[-1] < end and i < 7:
+                i += 1
+                extended_index = pd.date_range(
+                    df.index[-1] + pd.Timedelta(30, "minutes"),
+                    df.index[-1] + pd.Timedelta(24, "hours"),
+                    freq="30min",
+                )
+                dfx = pd.concat([df, pd.DataFrame(index=extended_index)]).shift(48).loc[extended_index[0] :]
+                df = pd.concat([df, dfx])
+                df = df[df.columns[0]]
+            df = df.loc[start:end]
+        df.name = "unit"
 
-                if self.agile_predict is not None:
-                    df = pd.concat(
-                        [
-                            df,
-                            self.agile_predict.loc[df.index[-1] + pd.Timedelta("30min") : end],
-                        ]
-                    )
+        # SVB logging
+        # self.log("")
+        # self.log("Printin df just before concat.....")
+        # self.log(df.to_string())
 
-            # If the index frequency >30 minutes so we need to just extend it:
-            if (len(df) > 1 and ((df.index[-1] - df.index[-2]).total_seconds() / 60) > 30) or len(df) == 1:
-                newindex = pd.date_range(df.index[0], end, freq="30min")
-                df = df.reindex(index=newindex).ffill().loc[start:]
-            else:
-                i = 0
-                while df.index[-1] < end and i < 7:
-                    i += 1
-                    extended_index = pd.date_range(
-                        df.index[-1] + pd.Timedelta(30, "minutes"),
-                        df.index[-1] + pd.Timedelta(24, "hours"),
-                        freq="30min",
-                    )
-                    dfx = pd.concat([df, pd.DataFrame(index=extended_index)]).shift(48).loc[extended_index[0] :]
-                    df = pd.concat([df, dfx])
-                    df = df[df.columns[0]]
-                df = df.loc[start:end]
-            df.name = "unit"
+        # SVB #
+        # It is at this point that df now looks like the Dataframe that compare_tariffs loads. This is the point
+        # to overwrite the Df with IOG data from the BottlecapDave integration, loaded in pv_opt.py and passed in here via self.host.io_prices.
+        # (SVB Note: io_prices should be passed in via Class, but I cannot figure out the structure of Tariff and Contract Classes to do this)
+
+        if len(self.host.io_prices) > 0 and "INTELLI" in self.name:
+            # Add IO slot prices as a column to dataframe.
+            df = pd.concat([df, self.host.io_prices], axis=1).set_axis(["unit", "io_unit"], axis=1)
+
+            df = df.dropna(subset=["unit"])  # Drop Nans
+            mask = df["io_unit"] < df["unit"]  # Mask is true if an IOslot
+            df.loc[mask, "unit"] = df[
+                "io_unit"
+            ]  # Overwrite unit (prices from website) with io_unit (prices from OE integration) if in an IOslot.
+            df = df.drop(["io_unit"], axis=1)  # remove IO prices column
 
             # SVB logging
-            # self.log("")
-            # self.log("Printin df just before concat.....")
+            # self.log("To_df, Printing result")
             # self.log(df.to_string())
-
-            # SVB #
-            # It is at this point that df now looks like the Dataframe that compare_tariffs loads. This is the point
-            # to overwrite the Df with IOG data from the BottlecapDave integration, loaded in pv_opt.py and passed in here via self.host.io_prices.
-            # (SVB Note: io_prices should be passed in via Class, but I cannot figure out the structure of Tariff and Contract Classes to do this)
-
-            if len(self.host.io_prices) > 0 and "INTELLI" in self.name:
-                # Add IO slot prices as a column to dataframe.
-                df = pd.concat([df, self.host.io_prices], axis=1).set_axis(["unit", "io_unit"], axis=1)
-
-                df = df.dropna(subset=["unit"])  # Drop Nans
-                mask = df["io_unit"] < df["unit"]  # Mask is true if an IOslot
-                df.loc[mask, "unit"] = df[
-                    "io_unit"
-                ]  # Overwrite unit (prices from website) with io_unit (prices from OE integration) if in an IOslot.
-                df = df.drop(["io_unit"], axis=1)  # remove IO prices column
-
-                # SVB logging
-                # self.log("To_df, Printing result")
-                # self.log(df.to_string())
 
         # Add a column "fixed" for the standing charge.
         if not self.export:
