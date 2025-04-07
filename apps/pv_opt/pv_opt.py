@@ -3563,7 +3563,7 @@ class PVOpt(hass.Hass):
                 "friendly_name": name,
                 "device_class": "monetary",
                 "state_class": "measurement",
-                "unit_of_measurement": "GBP",
+                "unit_of_measurement": "EUR",
                 "cost_today": round(
                     (cost["cost"].loc[: midnight - pd.Timedelta(30, "minutes")].sum()) / 100,
                     2,
@@ -3909,7 +3909,7 @@ class PVOpt(hass.Hass):
 
             for entity_id in entity_ids:
                 power = self.hass2df(entity_id=entity_id, days=days)
-                self.log(f"Getting consumption in W from: {entity_id} ")
+                self.log(f"Getting consumption in W from: {entity_id}, {power}")
                 power = self.riemann_avg(power)
                 if df is None:
                     df = power
@@ -4200,7 +4200,7 @@ class PVOpt(hass.Hass):
             attributes={
                 "state_class": "measurement",
                 "device_class": "monetary",
-                "unit_of_measurement": "GBP",
+                "unit_of_measurement": "EUR",
                 "friendly_name": f"PV Opt Comparison Actual",
             }
             | {
@@ -4210,7 +4210,7 @@ class PVOpt(hass.Hass):
         )
 
         self.ulog("Net Cost comparison:", underline=None)
-        self.log(f"  {'Tariff':20s}  {'Base Cost (GBP)':>20s}  {'Optimised Cost (GBP)':>20s} ")
+        self.log(f"  {'Tariff':20s}  {'Base Cost (EUR)':>20s}  {'Optimised Cost (EUR)':>20s} ")
         self.log(f"  {'------':20s}  {'---------------':>20s}  {'--------------------':>20s} ")
         self.log(f"  {'Actual':20s}  {'':20s}  {(actual.sum()/100):>20.3f}")
 
@@ -4237,7 +4237,7 @@ class PVOpt(hass.Hass):
             attributes = {
                 "state_class": "measurement",
                 "device_class": "monetary",
-                "unit_of_measurement": "GBP",
+                "unit_of_measurement": "EUR",
                 "friendly_name": f"PV Opt Comparison {contract.name}",
                 "net_base": round(net_base.sum() / 100, 2),
             } | {col: opt[["period_start", col]].to_dict("records") for col in cols if col in opt.columns}

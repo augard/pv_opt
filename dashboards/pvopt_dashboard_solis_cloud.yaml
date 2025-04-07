@@ -48,7 +48,7 @@ views:
                   {{((as_local(as_datetime(states('sensor.solis_rtc'))))|string)[11:16]}}
           - type: markdown
             content: >
-              <h3><u>Cost Summary (GBP)</u></h3>
+              <h3><u>Cost Summary (EUR)</u></h3>
 
 
               | | Today | Tomorrow | Total |
@@ -80,7 +80,7 @@ views:
               states('sensor.pvopt_opt_cost')| float) | round(2)) }}</b> |  
 
 
-              <h3><u>Optimisation Breakdown (GBP)</u></h3>
+              <h3><u>Optimisation Breakdown (EUR)</u></h3>
 
 
               |  | Cost ||
