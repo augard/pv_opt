@@ -21,7 +21,7 @@ INVERTER_DEFS = {
         # required config. These config items can be over-written by config specified in the config.yaml
         # file. They are required for the main PV_Opt module and if they cannot be found an ERROR will be
         # raised
-        "online": "number.{device_name}_battery_capacity",
+        "online": "sensor.{device_name}_battery_capacity",
         "default_config": {
             "id_battery_soc": "sensor.{device_name}_battery_capacity",
             "id_consumption": "sensor.{device_name}_house_load",
@@ -37,7 +37,6 @@ INVERTER_DEFS = {
         "brand_config": {
             "battery_voltage": "sensor.{device_name}_battery_voltage_charge",
             "id_allow_grid_charge": "select.{device_name}_allow_grid_charge",
-            "id_battery_capacity": "sensor.{device_name}_battery_capacity",
             "id_battery_charge_max_current": "number.{device_name}_battery_charge_max_current",
             "id_battery_discharge_max_current": "number.{device_name}_battery_discharge_max_current",
             "id_charge_end_time_1": "select.{device_name}_charger_end_time_1",
@@ -59,8 +58,11 @@ class InverterController:
         self.tz = self.host.tz
         if host is not None:
             self.log = host.log
+            self.tz = self.host.tz
+            self.config = self.host.config
+
         self.type = inverter_type
-        self.config = {}
+
         self.brand_config = {}
         for defs, conf in zip(
             [INVERTER_DEFS[self.type][x] for x in ["default_config", "brand_config"]],
@@ -69,10 +71,10 @@ class InverterController:
             for item in defs:
                 if isinstance(defs[item], str):
                     conf[item] = defs[item].replace("{device_name}", self.host.device_name)
-                    # conf[item] = defs[item].replace("{inverter_sn}", self.host.inverter_sn)
+                    conf[item] = defs[item].replace("{inverter_sn}", self.host.inverter_sn)
                 elif isinstance(defs[item], list):
                     conf[item] = [z.replace("{device_name}", self.host.device_name) for z in defs[item]]
-                    # conf[item] = [z.replace("{inverter_sn}", self.host.inverter_sn) for z in defs[item]]
+                    conf[item] = [z.replace("{inverter_sn}", self.host.inverter_sn) for z in defs[item]]
                 else:
                     conf[item] = defs[item]
 
@@ -91,10 +93,7 @@ class InverterController:
 
     def enable_timed_mode(self):
         if self.type == "SOLAX_X1":
-            self.host.set_select("lock_state", "Unlocked - Advanced")
-            self.host.set_select("allow_grid_charge", "Period 1 Allowed")
-            self.host.set_select("backup_grid_charge", "Disabled")
-
+            pass
         else:
             self._unknown_inverter()
 
@@ -190,22 +189,34 @@ class InverterController:
             time_now = pd.Timestamp.now(tz=self.tz)
             midnight = time_now.normalize()
 
+            self.log(f"Host wtf {self.host}")
+
             try:
-                powerControl = self._host.get_state_retry("select.solax_remotecontrol_power_control")
-                power = self._host.get_state_retry("select.solax_remotecontrol_active_power")
+                powerControl = self.host.get_state_retry("select.solax_remotecontrol_power_control")
+                power = self.host.get_state_retry("select.solax_remotecontrol_active_power")
 
-                status["charge"]["power"] = power if powerControl == "Enabled Battery Control" and power > 0 else 0
-                status["charge"]["active"] = powerControl == "Enabled Battery Control" and power > 0
-
-                status["discharge"]["power"] = power * -1 if powerControl == "Enabled Battery Control" and power < 0 else 0
-                status["discharge"]["active"] = powerControl == "Enabled Battery Control" and power < 0
-
-                status["hold_soc"]["active"] = powerControl == "Enabled No Discharge"
-                status["hold_soc"]["soc"] = 0.0
+                status["charge"] = {
+                    "power": power if powerControl == "Enabled Battery Control" and power > 0 else 0,
+                    "active": powerControl == "Enabled Battery Control" and power > 0
+                }
+                status["discharge"] = {
+                    "power": power * -1 if powerControl == "Enabled Battery Control" and power < 0 else 0,
+                    "active": powerControl == "Enabled Battery Control" and power < 0
+                }
+                status["hold_soc"] = {
+                    "active": powerControl == "Enabled No Discharge",
+                     "soc": 0.0
+                }
             except:
-                status["charge"]["active"] = False
-                status["discharge"]["active"] = False
-                status["hold_soc"]["active"] = False
+                status["charge"] = {
+                    "active": False
+                }
+                status["discharge"] = {
+                    "active": False
+                }
+                status["hold_soc"] = {
+                    "active": False
+                }
 
             self.log(f"SolaX status {status}")
         else:
@@ -213,14 +224,11 @@ class InverterController:
 
         return status
 
-    def _monitor_target_soc(self, target_soc, mode="charge"):
-        pass
-
     def _press_button(self, entity_id):
-        self._host.call_service("button/press", entity_id=entity_id)
+        self.host.call_service("button/press", entity_id=entity_id)
         time.sleep(0.5)
         try:
-            time_pressed = pd.Timestamp(self._host.get_state_retry(entity_id))
+            time_pressed = pd.Timestamp(self.host.get_state_retry(entity_id))
             dt = (pd.Timestamp.now(self._tz) - time_pressed).total_seconds()
             if dt < 10:
                 self.log(f"Successfully pressed button {entity_id}")
