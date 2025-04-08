@@ -194,10 +194,10 @@ class InverterController:
                 powerControl = self._host.get_state_retry("select.solax_remotecontrol_power_control")
                 power = self._host.get_state_retry("select.solax_remotecontrol_active_power")
 
-                status["charge"]["power"] = powerControl == "Enabled Battery Control" and power > 0 ? power : 0
+                status["charge"]["power"] = power if powerControl == "Enabled Battery Control" and power > 0 else 0
                 status["charge"]["active"] = powerControl == "Enabled Battery Control" and power > 0
 
-                status["discharge"]["power"] = powerControl == "Enabled Battery Control" and power < 0 ? power * -1 : 0
+                status["discharge"]["power"] = power * -1 if powerControl == "Enabled Battery Control" and power < 0 else 0
                 status["discharge"]["active"] = powerControl == "Enabled Battery Control" and power < 0
 
                 status["hold_soc"]["active"] = powerControl == "Enabled No Discharge"
@@ -207,6 +207,7 @@ class InverterController:
                 status["discharge"]["active"] = False
                 status["hold_soc"]["active"] = False
 
+            self.log(f"SolaX status {status}")
         else:
             self._unknown_inverter()
 
