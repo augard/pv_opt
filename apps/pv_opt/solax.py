@@ -202,18 +202,20 @@ class InverterController:
             status = {}
 
             try:
+                power = float(self.host.get_state_retry("number.solax_remotecontrol_active_power"))
                 powerControl = self.host.get_state_retry("select.solax_remotecontrol_power_control")
-                power = self.host.get_state_retry("select.solax_remotecontrol_active_power")
+
+                self.log(f"SolaX state {powerControl}, {power}")
 
                 status["charge"] = {
                     "power": power if powerControl == "Enabled Battery Control" and power > 0 else 0,
-                    "active": powerControl == "Enabled Battery Control" and power > 0,
+                    "active": True if powerControl == "Enabled Battery Control" and power > 0 else False,
                     "start": time_now,
                     "end": time_now
                 }
                 status["discharge"] = {
                     "power": power * -1 if powerControl == "Enabled Battery Control" and power < 0 else 0,
-                    "active": powerControl == "Enabled Battery Control" and power < 0,
+                    "active": True if powerControl == "Enabled Battery Control" and power < 0 else False,
                     "start": time_now,
                     "end": time_now
                 }
@@ -221,8 +223,8 @@ class InverterController:
                     "active": powerControl == "Enabled No Discharge",
                     "soc": 0.0
                 }
-            except:
-                self.log(f"Failed to read inverter status!")
+            except Exception as error:
+                self.log(f"Failed to read inverter status! {error}")
 
                 status["charge"] = {
                     "power": 0.0,
@@ -261,7 +263,7 @@ class InverterController:
         new_state = None
         if changed:
             try:
-                self.host.call_service("select/select_option", entity_id=entity_id, value=value)
+                self.host.call_service("select/select_option", entity_id=entity_id, option=value)
                 written = False
                 retries = 0
                 while not written and retries < WRITE_POLL_RETRIES:
