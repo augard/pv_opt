@@ -99,36 +99,44 @@ class InverterController:
 
     def control_charge(self, enable, **kwargs):
         if self.type == "SOLAX_X1":
+            powerControl = self.host.get_state_retry("select.solax_remotecontrol_power_control")
+            
             if enable:
                 self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=28800, verbose=True)
                 
                 power = kwargs.get("power")
                 if power is not None:
                     self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=power, verbose=True)
-                    self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Enabled Battery Control", verbose=True)
+                    self._write_to_hass(entity_id="number.solax_remotecontrol_import_limit", value=power if power > 0 else power * -1, verbose=True)
+                    self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Enabled Power Control", verbose=True)
 
                     voltage = self.host.get_config("battery_voltage")
                     if voltage == 0:
                         voltage = BATTERY_VOLTAGE_DEFAULT
                         self.log(f"Read a battery voltage of zero. Assuming default of {BATTERY_VOLTAGE_DEFAULT}")
-                    #current = abs(round(power / voltage, 1))
-                    #current = min(current, self.host.get_config("battery_current_limit_amps"))
 
-                    self.log(f"Power {power:0.0f} at {self.host.get_config('battery_voltage')}V")
+                    self.log(f"Charge: Power {power:0.0f}W, voltage: {voltage} at {self.host.get_config('battery_voltage')}")
                 else:
-                    self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=0, verbose=True)
-                    self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=0, verbose=True)
-                    self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Disabled", verbose=True)
+                    if powerControl != "Disable":
+                        self._disable_remote_control()
 
-                    self.log(f"Power is None, disable control")
+                    self.log(f"Charge: Power is None, disable control")
 
+                current_soc = float(self.host.get_state_retry("sensor.solax_battery_capacity"))
                 target_soc = kwargs.get("target_soc", None)
+
                 if target_soc is not None:
-                    self.log(f"Target SOC {target_soc}%")
+                    if current_soc >= 98:
+                        self._disable_remote_control()
+
+                        self.log(f"Charge: Battery is full ({current_soc}%), disabling control")
+                    else:
+                        self.log(f"Charge: Target SOC {target_soc}%")
             else:
-                self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=0, verbose=True)
-                self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=0, verbose=True)
-                self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Disabled", verbose=True)
+                if powerControl != "Disable":
+                    self._disable_remote_control()
+
+                self.log(f"Charge: Disable control")
 
             self._press_button(entity_id="button.solax_remotecontrol_trigger")
         else:
@@ -136,36 +144,44 @@ class InverterController:
 
     def control_discharge(self, enable, **kwargs):
         if self.type == "SOLAX_X1":
+            powerControl = self.host.get_state_retry("select.solax_remotecontrol_power_control")
+
             if enable:
                 self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=28800, verbose=True)
                 
                 power = kwargs.get("power")
                 if power is not None:
                     self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=power*-1, verbose=True)
-                    self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Enabled Battery Control", verbose=True)
+                    self._write_to_hass(entity_id="number.solax_remotecontrol_import_limit", value=power if power > 0 else power * -1, verbose=True)
+                    self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Enabled Power Control", verbose=True)
 
                     voltage = self.host.get_config("battery_voltage")
                     if voltage == 0:
                         voltage = BATTERY_VOLTAGE_DEFAULT
                         self.log(f"Read a battery voltage of zero. Assuming default of {BATTERY_VOLTAGE_DEFAULT}")
-                    #current = abs(round(power / voltage, 1))
-                    #current = min(current, self.host.get_config("battery_current_limit_amps"))
 
-                    self.log(f"Power {power:0.0f} at {self.host.get_config('battery_voltage')}V")
+                    self.log(f"Discharge: Power {power:0.0f}, voltage: {voltage} at {self.host.get_config('battery_voltage')}V")
                 else:
-                    self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=0, verbose=True)
-                    self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=0, verbose=True)
-                    self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Disabled", verbose=True)
+                    if powerControl != "Disable":
+                        self._disable_remote_control()
 
-                    self.log(f"Power is None, disable control")
+                    self.log(f"Discharge: Power is None, disable control")
 
+                current_soc = float(self.host.get_state_retry("sensor.solax_battery_capacity"))
                 target_soc = kwargs.get("target_soc", None)
+
                 if target_soc is not None:
-                    self.log(f"Target SOC {target_soc}%")
+                    if current_soc <= target_soc:
+                        self._disable_remote_control()
+
+                        self.log(f"Discharge: Battery is at targeted soc {target_soc}%, current battery charge {current_soc}%")
+                    else:
+                        self.log(f"Discharge: Target SOC {target_soc}%")
             else:
-                self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=0, verbose=True)
-                self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=0, verbose=True)
-                self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Disabled", verbose=True)
+                if powerControl != "Disable":
+                    self._disable_remote_control()
+
+                self.log(f"Discharge: Disable control")
 
             self._press_button(entity_id="button.solax_remotecontrol_trigger")
         else:
@@ -182,11 +198,14 @@ class InverterController:
             if enable:
                 self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=28800, verbose=True)
                 self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=0, verbose=True)
+                self._write_to_hass(entity_id="number.solax_remotecontrol_import_limit", value=0, verbose=True)
                 self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Enabled No Discharge", verbose=True)
+
+                self.log(f"Hold SOC: enabled control")
             else:
-                self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=0, verbose=True)
-                self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=0, verbose=True)
-                self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Disabled", verbose=True)
+                self._disable_remote_control()
+
+                self.log(f"Hold SOC: Disable control")
 
             self._press_button(entity_id="button.solax_remotecontrol_trigger")
         else:
@@ -204,27 +223,28 @@ class InverterController:
             try:
                 power = float(self.host.get_state_retry("number.solax_remotecontrol_active_power"))
                 powerControl = self.host.get_state_retry("select.solax_remotecontrol_power_control")
+                currentSoc = float(self.host.get_state_retry("sensor.solax_battery_capacity"))
 
-                self.log(f"SolaX state {powerControl}, {power}")
+                self.log(f"SolaX: State: {powerControl}, power: {power}, SOC: {currentSoc}")
 
                 status["charge"] = {
-                    "power": power if powerControl == "Enabled Battery Control" and power > 0 else 0,
-                    "active": True if powerControl == "Enabled Battery Control" and power > 0 else False,
+                    "power": power if powerControl == "Enabled Power Control" and power > 0 else 0,
+                    "active": True if powerControl == "Enabled Power Control" and power > 0 else False,
                     "start": time_now,
                     "end": time_now
                 }
                 status["discharge"] = {
-                    "power": power * -1 if powerControl == "Enabled Battery Control" and power < 0 else 0,
-                    "active": True if powerControl == "Enabled Battery Control" and power < 0 else False,
+                    "power": power * -1 if powerControl == "Enabled Power Control" and power < 0 else 0,
+                    "active": True if powerControl == "Enabled Power Control" and power < 0 else False,
                     "start": time_now,
                     "end": time_now
                 }
                 status["hold_soc"] = {
-                    "active": powerControl == "Enabled No Discharge",
+                    "active": True if powerControl == "Enabled No Discharge" and power == 0 else False,
                     "soc": 0.0
                 }
             except Exception as error:
-                self.log(f"Failed to read inverter status! {error}")
+                self.log(f"SolaX: Failed to read inverter status! {error}")
 
                 status["charge"] = {
                     "power": 0.0,
@@ -243,11 +263,17 @@ class InverterController:
                     "soc": 0.0
                 }
 
-            self.log(f"SolaX status {status}")
+            self.log(f"SolaX: Status: {status}")
         else:
             self._unknown_inverter()
 
         return status
+
+    def _disable_remote_control(self):
+        self._write_to_hass(entity_id="number.solax_remotecontrol_autorepeat_duration", value=0, verbose=True)
+        self._write_to_hass(entity_id="number.solax_remotecontrol_active_power", value=0, verbose=True)
+        self._write_to_hass(entity_id="number.solax_remotecontrol_import_limit", value=0, verbose=True)
+        self._select_in_hass(entity_id="select.solax_remotecontrol_power_control", value="Disabled", verbose=True)
 
     def _write_to_hass(self, entity_id, value, **kwargs):
         return self.host.write_and_poll_value(entity_id=entity_id, value=value, **kwargs)
